@@ -1,0 +1,126 @@
+﻿<Window x:Class="DouyinDownloader.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:DouyinDownloader.ViewModels"
+        mc:Ignorable="d"
+        Title="抖音无水印下载"
+        Width="520"
+        SizeToContent="Height"
+        MinWidth="480"
+        MaxWidth="620"
+        ResizeMode="CanResizeWithGrip"
+        Background="#F3F3F3"
+        Foreground="#1A1A1A"
+        FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
+        FontSize="13"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        WindowStartupLocation="CenterScreen"
+        d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
+    <StackPanel Margin="16,14">
+        <TextBlock Text="抖音无水印下载" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+        <TextBlock Text="分享链接" Foreground="#6B6B6B" FontSize="12" Margin="0,0,0,4"/>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Text="{Binding ShareText, UpdateSourceTrigger=PropertyChanged}"
+                     Height="56"
+                     Padding="8,6"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalContentAlignment="Top"
+                     VerticalScrollBarVisibility="Auto"
+                     IsReadOnly="{Binding IsBusy}"/>
+            <Button Grid.Column="1" Content="粘贴" Command="{Binding PasteFromClipboardCommand}" Margin="8,0,0,0" VerticalAlignment="Top"/>
+            <Button Grid.Column="2" Style="{StaticResource AccentButton}" Content="解析" Command="{Binding ParseCommand}" Margin="8,0,0,0" VerticalAlignment="Top"/>
+        </Grid>
+
+        <Border Background="White"
+                BorderBrush="#D0D0D0"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="8"
+                Margin="0,12,0,0"
+                Visibility="{Binding HasWork, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="48"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="48" Height="64" CornerRadius="3" Background="#EEE" ClipToBounds="True">
+                    <Grid>
+                        <TextBlock Text="无封面" FontSize="10" Foreground="#6B6B6B"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding HasCover, Converter={StaticResource InverseBoolToVis}}"/>
+                        <Image Source="{Binding CoverImage}" Stretch="UniformToFill"
+                               Visibility="{Binding HasCover, Converter={StaticResource BoolToVis}}"/>
+                    </Grid>
+                </Border>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Work.DisplayTitle}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="36" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Margin="0,2,0,0" Foreground="#6B6B6B" FontSize="12" TextTrimming="CharacterEllipsis">
+                        <Run Text="{Binding Work.DisplayAuthor, Mode=OneWay}"/>
+                        <Run Text=" · "/>
+                        <Run Text="{Binding Work.TypeLabel, Mode=OneWay}"/>
+                        <Run Text=" · "/>
+                        <Run Text="{Binding Work.AwemeId, Mode=OneWay}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock Text="保存到" Foreground="#6B6B6B" FontSize="12" Margin="0,12,0,4"/>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Text="{Binding SaveDirectory, UpdateSourceTrigger=PropertyChanged}"
+                     Height="32"
+                     Padding="8,0"
+                     VerticalContentAlignment="Center"
+                     TextWrapping="NoWrap"
+                     AcceptsReturn="False"
+                     ToolTip="{Binding SaveDirectory}"/>
+            <Button Grid.Column="1" Content="浏览" Command="{Binding BrowseFolderCommand}" Margin="8,0,0,0"/>
+            <Button Grid.Column="2" Style="{StaticResource AccentButton}" Content="下载" Command="{Binding DownloadCommand}" Margin="8,0,0,0"/>
+        </Grid>
+
+        <ProgressBar Margin="0,10,0,0"
+                     Minimum="0" Maximum="100"
+                     Value="{Binding ProgressValue}"
+                     IsIndeterminate="{Binding ProgressIsIndeterminate}"/>
+
+        <DockPanel Margin="0,8,0,0" LastChildFill="True">
+            <Button DockPanel.Dock="Right" Content="打开目录" Command="{Binding OpenFolderCommand}" Height="28" MinWidth="72" FontSize="12"/>
+            <TextBlock Text="{Binding StatusText}"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       Margin="0,0,10,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="#6B6B6B"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsError}" Value="True">
+                                <Setter Property="Foreground" Value="#C42B1C"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DockPanel>
+    </StackPanel>
+</Window>
