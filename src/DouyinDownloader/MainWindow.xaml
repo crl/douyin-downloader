@@ -93,13 +93,12 @@
                                         <Style TargetType="Image">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
-                                                <MultiDataTrigger>
-                                                    <MultiDataTrigger.Conditions>
-                                                        <Condition Binding="{Binding HasCover}" Value="True"/>
-                                                        <Condition Binding="{Binding IsPlaybackVisible}" Value="False"/>
-                                                    </MultiDataTrigger.Conditions>
+                                                <DataTrigger Binding="{Binding HasCover}" Value="True">
                                                     <Setter Property="Visibility" Value="Visible"/>
-                                                </MultiDataTrigger>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsPlaybackVisible}" Value="True">
+                                                    <Setter Property="Opacity" Value="0"/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Image.Style>
@@ -122,17 +121,17 @@
                                     <Grid.InputBindings>
                                         <MouseBinding MouseAction="LeftClick" Command="{Binding PlayPauseCommand}"/>
                                     </Grid.InputBindings>
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Setter Property="Opacity" Value="0"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="1"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
                                     <Grid Width="56" Height="56" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Grid.Style>
-                                            <Style TargetType="Grid">
-                                                <Setter Property="Opacity" Value="0"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsMouseOver, ElementName=CoverHitLayer}" Value="True">
-                                                        <Setter Property="Opacity" Value="1"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Grid.Style>
                                         <Ellipse Fill="#99000000"/>
                                         <Path Data="M 22,16 L 22,40 L 40,28 Z"
                                               Fill="White"
@@ -202,17 +201,17 @@
                                             <BlurEffect Radius="40" KernelType="Gaussian"/>
                                         </Border.Effect>
                                     </Border>
-                                    <Border CornerRadius="16,12,12,16" Background="#33FFFFFF" IsHitTestVisible="False"/>
+                                    <Border CornerRadius="16,12,12,16" Background="#70FFFFFF" IsHitTestVisible="False"/>
                                     <Border CornerRadius="16,12,12,16" IsHitTestVisible="False">
                                         <Border.Background>
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#55FFFFFF" Offset="0"/>
+                                                <GradientStop Color="#88FFFFFF" Offset="0"/>
                                                 <GradientStop Color="#00FFFFFF" Offset="0.35"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                     </Border>
                                     <StackPanel Margin="12,12,10,10" VerticalAlignment="Top">
-                                        <Border Background="#33FFFFFF" CornerRadius="4" Padding="10,4" HorizontalAlignment="Left" Margin="0,0,0,14">
+                                        <Border Background="#55FFFFFF" CornerRadius="4" Padding="10,4" HorizontalAlignment="Left" Margin="0,0,0,14">
                                             <TextBlock Text="{Binding Work.TypeLabel}" FontSize="13" Foreground="#25F4EE"/>
                                         </Border>
                                         <TextBlock Text="{Binding Work.DisplayTitle}"

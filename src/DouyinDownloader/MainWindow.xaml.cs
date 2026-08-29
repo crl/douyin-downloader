@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private const int WmSysCommand = 0x0112;
     private const int ScMaximize = 0xF030;
     private MainViewModel? _viewModel;
+    private bool _mediaEnded;
 
     public MainWindow()
     {
@@ -108,6 +109,7 @@ public partial class MainWindow : Window
 
         if (e.PropertyName is nameof(MainViewModel.PlaybackUri))
         {
+            _mediaEnded = false;
             PreviewPlayer.Stop();
             PreviewPlayer.Source = _viewModel.PlaybackUri;
             if (_viewModel.PlaybackUri is not null && _viewModel.IsPlaying)
@@ -120,6 +122,7 @@ public partial class MainWindow : Window
         {
             if (_viewModel.IsPlaying)
             {
+                RestartIfEnded();
                 PreviewPlayer.Play();
             }
             else
@@ -129,11 +132,24 @@ public partial class MainWindow : Window
         }
         else if (e.PropertyName is nameof(MainViewModel.IsPlaybackVisible) && !_viewModel.IsPlaybackVisible)
         {
+            _mediaEnded = false;
             PreviewPlayer.Stop();
             PreviewPlayer.Source = null;
             PreviewPlayer.Width = double.NaN;
             PreviewPlayer.Height = double.NaN;
         }
+    }
+
+    private void RestartIfEnded()
+    {
+        if (!_mediaEnded)
+        {
+            return;
+        }
+
+        _mediaEnded = false;
+        PreviewPlayer.Stop();
+        PreviewPlayer.Position = TimeSpan.Zero;
     }
 
     private async void OnPreviewMediaFailed(object sender, ExceptionRoutedEventArgs e)
@@ -146,6 +162,9 @@ public partial class MainWindow : Window
 
     private void OnPreviewMediaEnded(object sender, RoutedEventArgs e)
     {
+        _mediaEnded = true;
+        PreviewPlayer.Stop();
+        PreviewPlayer.Position = TimeSpan.Zero;
         _viewModel?.OnMediaEnded();
     }
 }
