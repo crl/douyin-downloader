@@ -7,6 +7,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <helpers:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
         <helpers:StringEqualsConverter x:Key="StringEquals"/>
+        <helpers:BoolToStarGridLengthConverter x:Key="BoolToStar"/>
 
         <SolidColorBrush x:Key="FieldBrush" Color="#1C1C1C"/>
         <SolidColorBrush x:Key="LineBrush" Color="#333333"/>
@@ -17,6 +18,25 @@
         <SolidColorBrush x:Key="ButtonBrush" Color="#2A2A2A"/>
         <SolidColorBrush x:Key="ButtonHoverBrush" Color="#353535"/>
         <SolidColorBrush x:Key="ErrorBrush" Color="#FF6B81"/>
+
+        <Style TargetType="ToolTip">
+            <Setter Property="MaxWidth" Value="320"/>
+            <Setter Property="Background" Value="#2A2A2A"/>
+            <Setter Property="Foreground" Value="#F4F4F4"/>
+            <Setter Property="BorderBrush" Value="#444444"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="HasDropShadow" Value="False"/>
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}"
+                                   TextWrapping="Wrap"
+                                   FontSize="13"
+                                   LineHeight="20"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource FieldBrush}"/>
@@ -118,11 +138,53 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
 
+        <Style x:Key="InfoToggle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="ToolTip" Value="收起或展开作品信息"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent">
+                            <Path x:Name="Arrow"
+                                  Fill="#F4F4F4"
+                                  Opacity="0"
+                                  Data="M0,0 L6,5 L0,10 Z"
+                                  Stretch="Uniform"
+                                  Width="8" Height="12"
+                                  HorizontalAlignment="Right"
+                                  VerticalAlignment="Center"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform>
+                                    <RotateTransform Angle="180"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="False">
+                                <Setter TargetName="Arrow" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <RotateTransform Angle="0"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Arrow" Property="Opacity" Value="1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Margin" Value="0,0,16,0"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
     </Application.Resources>

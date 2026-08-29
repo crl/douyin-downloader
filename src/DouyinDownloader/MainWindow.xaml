@@ -18,6 +18,7 @@
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
         WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -46,7 +47,7 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0">
-                <TextBlock Text="分享链接" Foreground="#8A8A8A" FontSize="13" Margin="0,0,0,8"/>
+                <!-- <TextBlock Text="分享链接" Foreground="#8A8A8A" FontSize="13" Margin="0,0,0,8"/> -->
                 <TextBox Text="{Binding ShareText, UpdateSourceTrigger=PropertyChanged}"
                          MinHeight="110"
                          Padding="5,5"
@@ -58,15 +59,16 @@
                 <Button Style="{StaticResource AccentButton}"
                         Content="解析作品"
                         Command="{Binding ParseCommand}"
-                        Margin="0,10,0,0"/>
+                        Margin="0,5,0,0"/>
             </StackPanel>
 
-            <Border Grid.Row="1"
+            <Border x:Name="PreviewCard"
+                    Grid.Row="1"
                     Background="#1A1A1A"
                     CornerRadius="12"
-                    Margin="0,14,0,0"
+                    Margin="0,6,0,0"
                     MinHeight="220"
-                    ClipToBounds="True">
+                    SizeChanged="OnPreviewCardSizeChanged">
                 <Grid>
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Visibility="{Binding HasWork, Converter={StaticResource InverseBoolToVis}}">
@@ -79,51 +81,186 @@
                     </StackPanel>
 
                     <Grid Visibility="{Binding HasWork, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.15*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="#111" ClipToBounds="True" Cursor="Hand"
-                                ToolTip="点击按所选清晰度下载并预览">
-                            <Border.InputBindings>
-                                <MouseBinding MouseAction="LeftClick" Command="{Binding PreviewCommand}"/>
-                            </Border.InputBindings>
+                        <Border x:Name="CoverHost"
+                                Background="#111"
+                                ClipToBounds="True"
+                                SizeChanged="OnCoverHostSizeChanged">
                             <Grid>
                                 <TextBlock Text="无封面" Foreground="#8A8A8A" HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Visibility="{Binding HasCover, Converter={StaticResource InverseBoolToVis}}"/>
-                                <Image Source="{Binding CoverImage}" Stretch="Uniform"
-                                       Visibility="{Binding HasCover, Converter={StaticResource BoolToVis}}"/>
-                                <Border VerticalAlignment="Bottom" Background="#99000000" Padding="8,6"
-                                        Visibility="{Binding HasWork, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="点击预览" Foreground="#DDFFFFFF" FontSize="12" HorizontalAlignment="Center"/>
-                                </Border>
+                                <Image Source="{Binding CoverImage}" Stretch="Uniform">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding HasCover}" Value="True"/>
+                                                        <Condition Binding="{Binding IsPlaybackVisible}" Value="False"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                                <MediaElement x:Name="PreviewPlayer"
+                                              LoadedBehavior="Manual"
+                                              UnloadedBehavior="Stop"
+                                              Stretch="Uniform"
+                                              ScrubbingEnabled="True"
+                                              HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Stretch"
+                                              Visibility="{Binding IsPlaybackVisible, Converter={StaticResource BoolToVis}}"
+                                              MediaFailed="OnPreviewMediaFailed"
+                                              MediaEnded="OnPreviewMediaEnded"
+                                              MediaOpened="OnPreviewMediaOpened"/>
+                                <Grid x:Name="CoverHitLayer"
+                                      Background="Transparent"
+                                      Cursor="Hand"
+                                      Visibility="{Binding ShowPlayOverlay, Converter={StaticResource BoolToVis}}">
+                                    <Grid.InputBindings>
+                                        <MouseBinding MouseAction="LeftClick" Command="{Binding PlayPauseCommand}"/>
+                                    </Grid.InputBindings>
+                                    <Grid Width="56" Height="56" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Setter Property="Opacity" Value="0"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMouseOver, ElementName=CoverHitLayer}" Value="True">
+                                                        <Setter Property="Opacity" Value="1"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
+                                        <Ellipse Fill="#99000000"/>
+                                        <Path Data="M 22,16 L 22,40 L 40,28 Z"
+                                              Fill="White"
+                                              Stretch="None">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <Border Width="5" Height="18" Background="White" CornerRadius="1" Margin="0,0,5,0"/>
+                                            <Border Width="5" Height="18" Background="White" CornerRadius="1"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
                             </Grid>
                         </Border>
-                        <StackPanel Grid.Column="1" Margin="28,24,24,24" VerticalAlignment="Top">
-                            <Border Background="#2A2A2A" CornerRadius="4" Padding="10,4" HorizontalAlignment="Left" Margin="0,0,0,14">
-                                <TextBlock Text="{Binding Work.TypeLabel}" FontSize="13" Foreground="#25F4EE"/>
+
+                        <Grid HorizontalAlignment="Right"
+                              VerticalAlignment="Stretch"
+                              Panel.ZIndex="2">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Width" Value="28"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsInfoExpanded}" Value="True">
+                                            <Setter Property="Width" Value="258"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Border Width="230"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Stretch"
+                                    CornerRadius="16,12,12,16"
+                                    BorderBrush="#66FFFFFF"
+                                    BorderThickness="1"
+                                    ClipToBounds="True"
+                                    Visibility="{Binding IsInfoExpanded, Converter={StaticResource BoolToVis}}">
+                                <Grid>
+                                    <Border CornerRadius="16,12,12,16" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <VisualBrush Visual="{Binding ElementName=CoverHost}"
+                                                         Stretch="UniformToFill"
+                                                         AlignmentX="Right"
+                                                         AlignmentY="Center"/>
+                                        </Border.Background>
+                                        <Border.Effect>
+                                            <BlurEffect Radius="40" KernelType="Gaussian"/>
+                                        </Border.Effect>
+                                    </Border>
+                                    <Border CornerRadius="16,12,12,16" Background="#33FFFFFF" IsHitTestVisible="False"/>
+                                    <Border CornerRadius="16,12,12,16" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#55FFFFFF" Offset="0"/>
+                                                <GradientStop Color="#00FFFFFF" Offset="0.35"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    <StackPanel Margin="12,12,10,10" VerticalAlignment="Top">
+                                        <Border Background="#33FFFFFF" CornerRadius="4" Padding="10,4" HorizontalAlignment="Left" Margin="0,0,0,14">
+                                            <TextBlock Text="{Binding Work.TypeLabel}" FontSize="13" Foreground="#25F4EE"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding Work.DisplayTitle}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#F5F5F5"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxHeight="52"
+                                                   ToolTip="{Binding Work.DisplayTitle}"
+                                                   ToolTipService.ShowDuration="20000"/>
+                                        <TextBlock Margin="0,16,0,0"
+                                                   Foreground="#C8C8C8"
+                                                   FontSize="14"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Work.DisplayAuthor}">
+                                            <Run Text="作者  "/>
+                                            <Run Text="{Binding Work.DisplayAuthor, Mode=OneWay}" Foreground="#F5F5F5"/>
+                                        </TextBlock>
+                                        <TextBlock Margin="0,8,0,0"
+                                                   Foreground="#C8C8C8"
+                                                   FontSize="14"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Work.AwemeId}">
+                                            <Run Text="作品  "/>
+                                            <Run Text="{Binding Work.AwemeId, Mode=OneWay}" Foreground="#F5F5F5"/>
+                                        </TextBlock>
+                                        <StackPanel Margin="0,18,0,0" Visibility="{Binding ShowQualityOptions, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock Text="清晰度" Foreground="#C8C8C8" FontSize="13" Margin="0,0,0,8"/>
+                                            <StackPanel>
+                                                <RadioButton GroupName="Quality" Content="1080p" Foreground="#F5F5F5"
+                                                             IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=1080p}"/>
+                                                <RadioButton GroupName="Quality" Content="720p" Foreground="#F5F5F5"
+                                                             IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=720p}"/>
+                                                <RadioButton GroupName="Quality" Content="540p" Foreground="#F5F5F5"
+                                                             IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=540p}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
                             </Border>
-                            <TextBlock Text="{Binding Work.DisplayTitle}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                            <TextBlock Margin="0,16,0,0" Foreground="#8A8A8A" FontSize="14">
-                                <Run Text="作者  "/>
-                                <Run Text="{Binding Work.DisplayAuthor, Mode=OneWay}" Foreground="#F4F4F4"/>
-                            </TextBlock>
-                            <TextBlock Margin="0,8,0,0" Foreground="#8A8A8A" FontSize="14">
-                                <Run Text="作品  "/>
-                                <Run Text="{Binding Work.AwemeId, Mode=OneWay}" Foreground="#F4F4F4"/>
-                            </TextBlock>
-                            <StackPanel Margin="0,18,0,0" Visibility="{Binding ShowQualityOptions, Converter={StaticResource BoolToVis}}">
-                                <TextBlock Text="清晰度" Foreground="#8A8A8A" FontSize="13" Margin="0,0,0,8"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <RadioButton GroupName="Quality" Content="1080p"
-                                                 IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=1080p}"/>
-                                    <RadioButton GroupName="Quality" Content="720p"
-                                                 IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=720p}"/>
-                                    <RadioButton GroupName="Quality" Content="540p"
-                                                 IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=540p}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </StackPanel>
+                            <ToggleButton Style="{StaticResource InfoToggle}"
+                                          IsChecked="{Binding IsInfoExpanded}"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Stretch"/>
+                        </Grid>
                     </Grid>
                 </Grid>
             </Border>

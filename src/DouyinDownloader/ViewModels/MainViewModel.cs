@@ -36,14 +36,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ParseCommand))]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PlayPauseCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand))]
-    [NotifyCanExecuteChangedFor(nameof(PreviewCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PlayPauseCommand))]
     [NotifyPropertyChangedFor(nameof(HasWork))]
     [NotifyPropertyChangedFor(nameof(ShowQualityOptions))]
+    [NotifyPropertyChangedFor(nameof(ShowPlayOverlay))]
     private WorkInfo? _work;
 
     [ObservableProperty]
@@ -72,11 +73,28 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _selectedQuality = "1080p";
 
+    [ObservableProperty]
+    private bool _isInfoExpanded = true;
+
+    [ObservableProperty]
+    private bool _isPlaying;
+
+    [ObservableProperty]
+    private bool _isPlaybackVisible;
+
+    [ObservableProperty]
+    private Uri? _playbackUri;
+
+    private bool _triedRemotePlay;
+    private bool _handlingMediaFailed;
+
     public bool HasWork => Work is not null;
 
     public bool HasCover => CoverImage is not null;
 
     public bool ShowQualityOptions => Work is { IsVideo: true };
+
+    public bool ShowPlayOverlay => Work is { IsVideo: true };
 
     private bool CanParse() => !IsBusy && !string.IsNullOrWhiteSpace(ShareText);
 
@@ -115,7 +133,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Work = work;
             SetStatus(work.Type == WorkType.Gallery
                 ? $"解析成功：图集共 {work.ImageUrls.Count} 张。"
-                : "解析成功，选择清晰度后可下载或点击封面预览。");
+                : "解析成功，选择清晰度后可下载，或把鼠标移到封面上点击播放。");
             await LoadCoverAsync(work.CoverUrl, ct).ConfigureAwait(true);
         }).ConfigureAwait(true);
     }
@@ -149,31 +167,60 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }).ConfigureAwait(true);
     }
 
-    [RelayCommand(CanExecute = nameof(CanDownload))]
-    private async Task PreviewAsync()
+    private bool CanPlayPause()
+        => Work is { IsVideo: true } && (!IsBusy || IsPlaybackVisible);
+
+    [RelayCommand(CanExecute = nameof(CanPlayPause))]
+    private async Task PlayPauseAsync()
     {
-        if (Work is null)
+        if (Work is not { IsVideo: true })
         {
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(SaveDirectory))
+        if (IsPlaybackVisible && PlaybackUri is not null)
         {
-            SetStatus("请先选择保存目录。", isError: true);
+            IsPlaying = !IsPlaying;
             return;
         }
 
-        await RunBusyAsync("准备预览…", async ct =>
+        await StartPlaybackAsync().ConfigureAwait(true);
+    }
+
+    public async Task OnMediaFailedAsync()
+    {
+        if (_handlingMediaFailed)
         {
-            ProgressIsIndeterminate = true;
-            var progress = new Progress<DownloadProgress>(OnDownloadProgress);
-            var result = await _downloader.DownloadAsync(Work, SaveDirectory, SelectedQuality, progress, ct).ConfigureAwait(true);
-            LastSavedPath = result.PrimaryPath;
-            ProgressIsIndeterminate = false;
-            ProgressValue = 100;
-            SetStatus($"正在打开预览：{result.PrimaryPath}");
-            OpenMediaFile(result.PrimaryPath);
-        }).ConfigureAwait(true);
+            return;
+        }
+
+        if (PlaybackUri is null)
+        {
+            return;
+        }
+
+        _handlingMediaFailed = true;
+        try
+        {
+            if (PlaybackUri is { IsFile: true })
+            {
+                StopPlayback();
+                SetStatus("无法播放该视频。", isError: true);
+                return;
+            }
+
+            StopPlayback(keepRemoteAttempt: true);
+            await StartPlaybackAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            _handlingMediaFailed = false;
+        }
+    }
+
+    public void OnMediaEnded()
+    {
+        IsPlaying = false;
     }
 
     [RelayCommand]
@@ -308,17 +355,88 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static void OpenMediaFile(string path)
+    private async Task StartPlaybackAsync()
     {
-        Process.Start(new ProcessStartInfo
+        if (Work is not { IsVideo: true })
         {
-            FileName = path,
-            UseShellExecute = true
-        });
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SaveDirectory))
+        {
+            SetStatus("请先选择保存目录。", isError: true);
+            return;
+        }
+
+        var localPath = TryGetLocalVideoPath();
+        if (localPath is not null)
+        {
+            BeginPlayback(new Uri(localPath), "正在播放。");
+            return;
+        }
+
+        if (!_triedRemotePlay)
+        {
+            var urls = Work.GetVideoUrls(SelectedQuality);
+            if (urls.Count > 0 && Uri.TryCreate(urls[0], UriKind.Absolute, out var remote))
+            {
+                _triedRemotePlay = true;
+                BeginPlayback(remote, "正在播放…");
+                return;
+            }
+
+            _triedRemotePlay = true;
+        }
+
+        await RunBusyAsync("准备播放…", async ct =>
+        {
+            ProgressIsIndeterminate = true;
+            var progress = new Progress<DownloadProgress>(OnDownloadProgress);
+            var result = await _downloader.DownloadAsync(Work, SaveDirectory, SelectedQuality, progress, ct).ConfigureAwait(true);
+            LastSavedPath = result.PrimaryPath;
+            ProgressIsIndeterminate = false;
+            ProgressValue = 100;
+            BeginPlayback(new Uri(result.PrimaryPath), "正在播放。");
+        }).ConfigureAwait(true);
+    }
+
+    private string? TryGetLocalVideoPath()
+    {
+        if (Work is null || string.IsNullOrWhiteSpace(SaveDirectory))
+        {
+            return null;
+        }
+
+        var fileName = FileNameHelper.BuildVideoFileName(Work.Author, Work.Title, Work.AwemeId, SelectedQuality);
+        var filePath = Path.Combine(SaveDirectory, fileName);
+        return File.Exists(filePath) && new FileInfo(filePath).Length > 1024 ? filePath : null;
+    }
+
+    private void BeginPlayback(Uri uri, string status)
+    {
+        PlaybackUri = uri;
+        IsPlaybackVisible = true;
+        IsPlaying = true;
+        PlayPauseCommand.NotifyCanExecuteChanged();
+        SetStatus(status);
+    }
+
+    private void StopPlayback(bool keepRemoteAttempt = false)
+    {
+        IsPlaying = false;
+        IsPlaybackVisible = false;
+        PlaybackUri = null;
+        if (!keepRemoteAttempt)
+        {
+            _triedRemotePlay = false;
+        }
+
+        PlayPauseCommand.NotifyCanExecuteChanged();
     }
 
     private void ResetWork()
     {
+        StopPlayback();
         Work = null;
         CoverImage = null;
         LastSavedPath = null;
