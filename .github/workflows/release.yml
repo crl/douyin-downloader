@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（不含 v），例如 1.0.0'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          } else {
+            $version = '${{ inputs.version }}'
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            throw "Invalid version: $version"
+          }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:GITHUB_WORKSPACE 'publish'
+          dotnet publish 'src/DouyinDownloader/DouyinDownloader.csproj' `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o $out `
+            -p:Version=$env:VERSION `
+            -p:AssemblyVersion=$env:VERSION `
+            -p:FileVersion=$env:VERSION `
+            -p:InformationalVersion=$env:VERSION `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false
+
+      - name: Pack zip
+        shell: pwsh
+        run: |
+          $name = "DouyinDownloader-$env:TAG-win-x64.zip"
+          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE 'publish\*') `
+            -DestinationPath (Join-Path $env:GITHUB_WORKSPACE $name)
+          "ASSET=$name" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $notes = "Windows x64 独立运行包，无需预装 .NET。解压后运行 DouyinDownloader.exe。"
+          gh release create $env:TAG $env:ASSET `
+            --title "抖音无水印下载 $env:TAG" `
+            --notes $notes `
+            --target $env:GITHUB_SHA

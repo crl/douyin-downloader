@@ -11,6 +11,7 @@
     <Product>抖音无水印下载</Product>
     <AssemblyTitle>抖音无水印下载</AssemblyTitle>
     <RootNamespace>DouyinDownloader</RootNamespace>
+    <Version>1.0.0</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
