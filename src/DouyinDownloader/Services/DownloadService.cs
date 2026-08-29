@@ -43,7 +43,8 @@ public sealed class DownloadService
     public async Task<DownloadResult> DownloadAsync(
         WorkInfo work,
         string directory,
-        IProgress<DownloadProgress>? progress,
+        string ratio = "1080p",
+        IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(directory);
@@ -53,17 +54,26 @@ public sealed class DownloadService
             return await DownloadImagesAsync(work, directory, progress, cancellationToken).ConfigureAwait(false);
         }
 
-        var fileName = Helpers.FileNameHelper.BuildVideoFileName(work.Author, work.Title, work.AwemeId);
+        var quality = string.IsNullOrWhiteSpace(ratio) ? "1080p" : ratio;
+        var fileName = Helpers.FileNameHelper.BuildVideoFileName(work.Author, work.Title, work.AwemeId, quality);
         var filePath = Path.Combine(directory, fileName);
+
+        if (File.Exists(filePath) && new FileInfo(filePath).Length > 1024)
+        {
+            progress?.Report(new DownloadProgress(0, null, "已存在该清晰度文件，跳过下载。"));
+            return new DownloadResult { Files = [filePath] };
+        }
+
+        var urls = work.GetVideoUrls(quality);
         Exception? lastError = null;
 
-        for (var i = 0; i < work.VideoUrls.Count; i++)
+        for (var i = 0; i < urls.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            progress?.Report(new DownloadProgress(0, null, $"正在下载视频（线路 {i + 1}/{work.VideoUrls.Count}）…"));
+            progress?.Report(new DownloadProgress(0, null, $"正在下载 {quality}（线路 {i + 1}/{urls.Count}）…"));
             try
             {
-                await DownloadFileAsync(work.VideoUrls[i], filePath, progress, cancellationToken, requireVideo: true)
+                await DownloadFileAsync(urls[i], filePath, progress, cancellationToken, requireVideo: true)
                     .ConfigureAwait(false);
                 return new DownloadResult { Files = [filePath] };
             }
@@ -97,6 +107,12 @@ public sealed class DownloadService
             var ext = Helpers.FileNameHelper.GuessImageExtension(url);
             var fileName = Helpers.FileNameHelper.BuildImageFileName(work.Author, work.Title, work.AwemeId, i + 1, total, ext);
             var filePath = Path.Combine(directory, fileName);
+            if (File.Exists(filePath) && new FileInfo(filePath).Length > 1024)
+            {
+                files.Add(filePath);
+                continue;
+            }
+
             progress?.Report(new DownloadProgress(0, null, $"正在下载图集 {i + 1}/{total}…"));
             await DownloadFileAsync(url, filePath, progress, cancellationToken, requireVideo: false).ConfigureAwait(false);
             files.Add(filePath);

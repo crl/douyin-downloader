@@ -36,11 +36,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ParseCommand))]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PreviewCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PreviewCommand))]
     [NotifyPropertyChangedFor(nameof(HasWork))]
+    [NotifyPropertyChangedFor(nameof(ShowQualityOptions))]
     private WorkInfo? _work;
 
     [ObservableProperty]
@@ -66,9 +69,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(OpenFolderCommand))]
     private string? _lastSavedPath;
 
+    [ObservableProperty]
+    private string _selectedQuality = "1080p";
+
     public bool HasWork => Work is not null;
 
     public bool HasCover => CoverImage is not null;
+
+    public bool ShowQualityOptions => Work is { IsVideo: true };
 
     private bool CanParse() => !IsBusy && !string.IsNullOrWhiteSpace(ShareText);
 
@@ -107,7 +115,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Work = work;
             SetStatus(work.Type == WorkType.Gallery
                 ? $"解析成功：图集共 {work.ImageUrls.Count} 张。"
-                : "解析成功，可以下载无水印视频。");
+                : "解析成功，选择清晰度后可下载或点击封面预览。");
             await LoadCoverAsync(work.CoverUrl, ct).ConfigureAwait(true);
         }).ConfigureAwait(true);
     }
@@ -130,7 +138,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             ProgressIsIndeterminate = true;
             var progress = new Progress<DownloadProgress>(OnDownloadProgress);
-            var result = await _downloader.DownloadAsync(Work, SaveDirectory, progress, ct).ConfigureAwait(true);
+            var result = await _downloader.DownloadAsync(Work, SaveDirectory, SelectedQuality, progress, ct).ConfigureAwait(true);
             LastSavedPath = result.PrimaryPath;
             ProgressIsIndeterminate = false;
             ProgressValue = 100;
@@ -138,6 +146,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
             SetStatus(count == 1
                 ? $"下载完成：{result.PrimaryPath}"
                 : $"下载完成：共 {count} 个文件，保存在 {result.Directory}");
+        }).ConfigureAwait(true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanDownload))]
+    private async Task PreviewAsync()
+    {
+        if (Work is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SaveDirectory))
+        {
+            SetStatus("请先选择保存目录。", isError: true);
+            return;
+        }
+
+        await RunBusyAsync("准备预览…", async ct =>
+        {
+            ProgressIsIndeterminate = true;
+            var progress = new Progress<DownloadProgress>(OnDownloadProgress);
+            var result = await _downloader.DownloadAsync(Work, SaveDirectory, SelectedQuality, progress, ct).ConfigureAwait(true);
+            LastSavedPath = result.PrimaryPath;
+            ProgressIsIndeterminate = false;
+            ProgressValue = 100;
+            SetStatus($"正在打开预览：{result.PrimaryPath}");
+            OpenMediaFile(result.PrimaryPath);
         }).ConfigureAwait(true);
     }
 
@@ -273,12 +308,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private static void OpenMediaFile(string path)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = path,
+            UseShellExecute = true
+        });
+    }
+
     private void ResetWork()
     {
         Work = null;
         CoverImage = null;
         LastSavedPath = null;
         ProgressValue = 0;
+        SelectedQuality = "1080p";
     }
 
     private void SetStatus(string text, bool isError = false)

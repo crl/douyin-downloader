@@ -6,121 +6,178 @@
         xmlns:vm="clr-namespace:DouyinDownloader.ViewModels"
         mc:Ignorable="d"
         Title="抖音无水印下载"
-        Width="520"
-        SizeToContent="Height"
-        MinWidth="480"
-        MaxWidth="620"
-        ResizeMode="CanResizeWithGrip"
-        Background="#F3F3F3"
-        Foreground="#1A1A1A"
+        Icon="Assets/app.ico"
+        Width="500" Height="1000"
+        MinWidth="500" MinHeight="1000"
+        MaxWidth="700" MaxHeight="1300"
+        Background="#111111"
+        Foreground="#F4F4F4"
         FontFamily="Microsoft YaHei UI, Microsoft YaHei, Segoe UI"
-        FontSize="13"
+        FontSize="14"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
         WindowStartupLocation="CenterScreen"
         d:DataContext="{d:DesignInstance Type=vm:MainViewModel}">
-    <StackPanel Margin="16,14">
-        <TextBlock Text="抖音无水印下载" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <TextBlock Text="分享链接" Foreground="#6B6B6B" FontSize="12" Margin="0,0,0,4"/>
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0"
-                     Text="{Binding ShareText, UpdateSourceTrigger=PropertyChanged}"
-                     Height="56"
-                     Padding="8,6"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     VerticalContentAlignment="Top"
-                     VerticalScrollBarVisibility="Auto"
-                     IsReadOnly="{Binding IsBusy}"/>
-            <Button Grid.Column="1" Content="粘贴" Command="{Binding PasteFromClipboardCommand}" Margin="8,0,0,0" VerticalAlignment="Top"/>
-            <Button Grid.Column="2" Style="{StaticResource AccentButton}" Content="解析" Command="{Binding ParseCommand}" Margin="8,0,0,0" VerticalAlignment="Top"/>
-        </Grid>
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <DockPanel LastChildFill="False">
+                <Ellipse Width="10" Height="10" Fill="#FE2C55" VerticalAlignment="Center"/>
+                <Ellipse Width="10" Height="10" Fill="#25F4EE" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock Text="抖音无水印下载" FontSize="22" FontWeight="SemiBold" Margin="12,0,0,0" VerticalAlignment="Center"/>
+            </DockPanel>
+            <TextBlock Text="粘贴分享文案，解析后即可保存无水印视频或图集"
+                       Foreground="#8A8A8A"
+                       FontSize="13"
+                       Margin="0,10,0,0"/>
+        </StackPanel>
 
-        <Border Background="White"
-                BorderBrush="#D0D0D0"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="8"
-                Margin="0,12,0,0"
-                Visibility="{Binding HasWork, Converter={StaticResource BoolToVis}}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="48"/>
-                    <ColumnDefinition Width="10"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Border Width="48" Height="64" CornerRadius="3" Background="#EEE" ClipToBounds="True">
-                    <Grid>
-                        <TextBlock Text="无封面" FontSize="10" Foreground="#6B6B6B"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Visibility="{Binding HasCover, Converter={StaticResource InverseBoolToVis}}"/>
-                        <Image Source="{Binding CoverImage}" Stretch="UniformToFill"
-                               Visibility="{Binding HasCover, Converter={StaticResource BoolToVis}}"/>
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="分享链接" Foreground="#8A8A8A" FontSize="13" Margin="0,0,0,8"/>
+                <TextBox Text="{Binding ShareText, UpdateSourceTrigger=PropertyChanged}"
+                         MinHeight="110"
+                         Padding="5,5"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalContentAlignment="Top"
+                         VerticalScrollBarVisibility="Auto"
+                         IsReadOnly="{Binding IsBusy}"/>
+                <Button Style="{StaticResource AccentButton}"
+                        Content="解析作品"
+                        Command="{Binding ParseCommand}"
+                        Margin="0,10,0,0"/>
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Background="#1A1A1A"
+                    CornerRadius="12"
+                    Margin="0,14,0,0"
+                    MinHeight="220"
+                    ClipToBounds="True">
+                <Grid>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding HasWork, Converter={StaticResource InverseBoolToVis}}">
+                        <TextBlock Text="作品信息" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="解析成功后，标题、作者与封面会显示在这里"
+                                   Foreground="#8A8A8A"
+                                   FontSize="13"
+                                   Margin="0,8,0,0"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Grid Visibility="{Binding HasWork, Converter={StaticResource BoolToVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.15*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#111" ClipToBounds="True" Cursor="Hand"
+                                ToolTip="点击按所选清晰度下载并预览">
+                            <Border.InputBindings>
+                                <MouseBinding MouseAction="LeftClick" Command="{Binding PreviewCommand}"/>
+                            </Border.InputBindings>
+                            <Grid>
+                                <TextBlock Text="无封面" Foreground="#8A8A8A" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Visibility="{Binding HasCover, Converter={StaticResource InverseBoolToVis}}"/>
+                                <Image Source="{Binding CoverImage}" Stretch="Uniform"
+                                       Visibility="{Binding HasCover, Converter={StaticResource BoolToVis}}"/>
+                                <Border VerticalAlignment="Bottom" Background="#99000000" Padding="8,6"
+                                        Visibility="{Binding HasWork, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="点击预览" Foreground="#DDFFFFFF" FontSize="12" HorizontalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="28,24,24,24" VerticalAlignment="Top">
+                            <Border Background="#2A2A2A" CornerRadius="4" Padding="10,4" HorizontalAlignment="Left" Margin="0,0,0,14">
+                                <TextBlock Text="{Binding Work.TypeLabel}" FontSize="13" Foreground="#25F4EE"/>
+                            </Border>
+                            <TextBlock Text="{Binding Work.DisplayTitle}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <TextBlock Margin="0,16,0,0" Foreground="#8A8A8A" FontSize="14">
+                                <Run Text="作者  "/>
+                                <Run Text="{Binding Work.DisplayAuthor, Mode=OneWay}" Foreground="#F4F4F4"/>
+                            </TextBlock>
+                            <TextBlock Margin="0,8,0,0" Foreground="#8A8A8A" FontSize="14">
+                                <Run Text="作品  "/>
+                                <Run Text="{Binding Work.AwemeId, Mode=OneWay}" Foreground="#F4F4F4"/>
+                            </TextBlock>
+                            <StackPanel Margin="0,18,0,0" Visibility="{Binding ShowQualityOptions, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="清晰度" Foreground="#8A8A8A" FontSize="13" Margin="0,0,0,8"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton GroupName="Quality" Content="1080p"
+                                                 IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=1080p}"/>
+                                    <RadioButton GroupName="Quality" Content="720p"
+                                                 IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=720p}"/>
+                                    <RadioButton GroupName="Quality" Content="540p"
+                                                 IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=540p}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
                     </Grid>
-                </Border>
-                <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Work.DisplayTitle}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="36" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Margin="0,2,0,0" Foreground="#6B6B6B" FontSize="12" TextTrimming="CharacterEllipsis">
-                        <Run Text="{Binding Work.DisplayAuthor, Mode=OneWay}"/>
-                        <Run Text=" · "/>
-                        <Run Text="{Binding Work.TypeLabel, Mode=OneWay}"/>
-                        <Run Text=" · "/>
-                        <Run Text="{Binding Work.AwemeId, Mode=OneWay}"/>
-                    </TextBlock>
-                </StackPanel>
-            </Grid>
-        </Border>
+                </Grid>
+            </Border>
 
-        <TextBlock Text="保存到" Foreground="#6B6B6B" FontSize="12" Margin="0,12,0,4"/>
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0"
-                     Text="{Binding SaveDirectory, UpdateSourceTrigger=PropertyChanged}"
-                     Height="32"
-                     Padding="8,0"
-                     VerticalContentAlignment="Center"
-                     TextWrapping="NoWrap"
-                     AcceptsReturn="False"
-                     ToolTip="{Binding SaveDirectory}"/>
-            <Button Grid.Column="1" Content="浏览" Command="{Binding BrowseFolderCommand}" Margin="8,0,0,0"/>
-            <Button Grid.Column="2" Style="{StaticResource AccentButton}" Content="下载" Command="{Binding DownloadCommand}" Margin="8,0,0,0"/>
+            <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                <TextBlock Text="保存位置" Foreground="#8A8A8A" FontSize="13" Margin="0,0,0,8"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Text="{Binding SaveDirectory, UpdateSourceTrigger=PropertyChanged}"
+                             Height="44"
+                             Padding="4,0"
+                             VerticalContentAlignment="Center"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="False"
+                             ToolTip="{Binding SaveDirectory}"/>
+                    <Button Grid.Column="2" Content="选择目录" Command="{Binding BrowseFolderCommand}"/>
+                </Grid>
+            </StackPanel>
         </Grid>
 
-        <ProgressBar Margin="0,10,0,0"
-                     Minimum="0" Maximum="100"
-                     Value="{Binding ProgressValue}"
-                     IsIndeterminate="{Binding ProgressIsIndeterminate}"/>
-
-        <DockPanel Margin="0,8,0,0" LastChildFill="True">
-            <Button DockPanel.Dock="Right" Content="打开目录" Command="{Binding OpenFolderCommand}" Height="28" MinWidth="72" FontSize="12"/>
-            <TextBlock Text="{Binding StatusText}"
-                       TextWrapping="NoWrap"
-                       TextTrimming="CharacterEllipsis"
-                       FontSize="12"
-                       VerticalAlignment="Center"
-                       Margin="0,0,10,0">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="Foreground" Value="#6B6B6B"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsError}" Value="True">
-                                <Setter Property="Foreground" Value="#C42B1C"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
-        </DockPanel>
-    </StackPanel>
+        <StackPanel Grid.Row="2" Margin="0,10,0,0">
+            <Button Style="{StaticResource AccentButton}"
+                    Content="下载"
+                    Command="{Binding DownloadCommand}"
+                    Height="48"
+                    FontSize="16"/>
+            <ProgressBar Margin="0,6,0,0"
+                         Minimum="0" Maximum="100"
+                         Value="{Binding ProgressValue}"
+                         IsIndeterminate="{Binding ProgressIsIndeterminate}"/>
+            <DockPanel Margin="0,14,0,0">
+                <Button DockPanel.Dock="Right" Content="打开目录" Command="{Binding OpenFolderCommand}" Height="40" MinWidth="100"/>
+                <TextBlock Text="{Binding StatusText}"
+                           TextWrapping="Wrap"
+                           FontSize="13"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#8A8A8A"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsError}" Value="True">
+                                    <Setter Property="Foreground" Value="#FF6B81"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </DockPanel>
+        </StackPanel>
+    </Grid>
 </Window>

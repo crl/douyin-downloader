@@ -303,11 +303,16 @@ public sealed class DouyinClient : IDisposable
 
         var isGallery = PhotoAwemeTypes.Contains(awemeType) || images.Count > 0;
         var coverUrl = FindCoverUrl(item, images);
-        var videoUrls = isGallery ? Array.Empty<string>() : BuildVideoUrls(item);
+        string? videoId = null;
+        string? fallbackPlayUrl = null;
 
-        if (!isGallery && videoUrls.Count == 0)
+        if (!isGallery)
         {
-            throw new DouyinException("未找到可下载的无水印视频地址。");
+            (videoId, fallbackPlayUrl) = ExtractPlayInfo(item);
+            if (string.IsNullOrWhiteSpace(videoId) && string.IsNullOrWhiteSpace(fallbackPlayUrl))
+            {
+                throw new DouyinException("未找到可下载的无水印视频地址。");
+            }
         }
 
         if (isGallery && images.Count == 0)
@@ -322,43 +327,38 @@ public sealed class DouyinClient : IDisposable
             Author = author,
             Type = isGallery ? WorkType.Gallery : WorkType.Video,
             CoverUrl = coverUrl,
-            VideoUrls = videoUrls,
+            VideoId = videoId,
+            FallbackPlayUrl = fallbackPlayUrl,
             ImageUrls = images
         };
     }
 
-    private static IReadOnlyList<string> BuildVideoUrls(JsonElement item)
+    private static (string? VideoId, string? FallbackPlayUrl) ExtractPlayInfo(JsonElement item)
     {
-        var urls = new List<string>();
         if (!item.TryGetProperty("video", out var video) || video.ValueKind != JsonValueKind.Object)
         {
-            return urls;
+            return (null, null);
         }
 
         if (!video.TryGetProperty("play_addr", out var playAddr) || playAddr.ValueKind != JsonValueKind.Object)
         {
-            return urls;
+            return (null, null);
         }
 
         var uri = GetString(playAddr, "uri");
-        if (!string.IsNullOrWhiteSpace(uri) && !uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(uri) || uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
-            urls.Add($"https://aweme.snssdk.com/aweme/v1/play/?video_id={Uri.EscapeDataString(uri)}&ratio=1080p&line=0");
-            urls.Add($"https://www.iesdouyin.com/aweme/v1/play/?video_id={Uri.EscapeDataString(uri)}&ratio=1080p&line=0");
+            uri = null;
         }
 
+        string? fallback = null;
         var playUrl = FirstUrl(playAddr, "url_list");
         if (!string.IsNullOrEmpty(playUrl))
         {
-            var noWatermark = playUrl.Replace("playwm", "play", StringComparison.OrdinalIgnoreCase);
-            AddUnique(urls, noWatermark);
-            if (!string.Equals(noWatermark, playUrl, StringComparison.OrdinalIgnoreCase))
-            {
-                AddUnique(urls, playUrl);
-            }
+            fallback = playUrl.Replace("playwm", "play", StringComparison.OrdinalIgnoreCase);
         }
 
-        return urls;
+        return (uri, fallback);
     }
 
     private static string? FindCoverUrl(JsonElement item, IReadOnlyList<string> images)
@@ -544,14 +544,6 @@ public sealed class DouyinClient : IDisposable
         return last;
     }
 
-    private static void AddUnique(List<string> urls, string url)
-    {
-        if (!urls.Contains(url, StringComparer.Ordinal))
-        {
-            urls.Add(url);
-        }
-    }
-
     private static HttpClientHandler CreateHandler(CookieContainer cookies, bool allowRedirect)
     {
         return new HttpClientHandler
@@ -559,7 +551,8 @@ public sealed class DouyinClient : IDisposable
             AllowAutoRedirect = allowRedirect,
             AutomaticDecompression = DecompressionMethods.All,
             CookieContainer = cookies,
-            UseCookies = true
+            UseCookies = true,
+            MaxConnectionsPerServer = 8
         };
     }
 

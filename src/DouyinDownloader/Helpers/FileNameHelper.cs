@@ -37,8 +37,8 @@ public static class FileNameHelper
         return cleaned.Length > maxLength ? cleaned[..maxLength].Trim('_', ' ', '.') : cleaned;
     }
 
-    public static string BuildVideoFileName(string author, string title, string awemeId)
-        => $"{Sanitize($"{author}_{title}_{awemeId}")}.mp4";
+    public static string BuildVideoFileName(string author, string title, string awemeId, string quality = "1080p")
+        => $"{Sanitize($"{author}_{title}_{awemeId}_{quality}")}.mp4";
 
     public static string BuildImageFileName(string author, string title, string awemeId, int index, int total, string extension)
     {

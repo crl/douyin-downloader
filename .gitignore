@@ -1,6 +1,7 @@
 bin/
 obj/
 .vs/
+.idea/
 *.user
 *.suo
 *.userosscache
@@ -13,3 +14,5 @@ downloads/
 *.jpeg
 *.png
 *.webp
+!src/DouyinDownloader/Assets/*.png
+!src/DouyinDownloader/Assets/*.ico

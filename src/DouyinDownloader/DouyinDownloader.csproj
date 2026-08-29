@@ -11,10 +11,15 @@
     <Product>抖音无水印下载</Product>
     <AssemblyTitle>抖音无水印下载</AssemblyTitle>
     <RootNamespace>DouyinDownloader</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
 </Project>
