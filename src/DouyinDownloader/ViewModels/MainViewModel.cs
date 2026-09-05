@@ -92,7 +92,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public bool HasCover => CoverImage is not null;
 
-    public bool ShowQualityOptions => Work is { IsVideo: true };
+    public bool ShowQualityOptions => Work is { IsVideo: true } && Work.Qualities.Count > 0;
 
     public bool ShowPlayOverlay => Work is { IsVideo: true };
 
@@ -131,9 +131,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             var work = await _client.ParseAsync(ShareText, ct).ConfigureAwait(true);
             Work = work;
+            if (work.Qualities.Count > 0)
+            {
+                SelectedQuality = work.Qualities[0].Id;
+            }
+
             SetStatus(work.Type == WorkType.Gallery
                 ? $"解析成功：图集共 {work.ImageUrls.Count} 张。"
-                : "解析成功，选择清晰度后可下载，或把鼠标移到封面上点击播放。");
+                : work.Qualities.Count > 0
+                    ? $"解析成功，可选 {string.Join(" / ", work.Qualities.Select(item => item.Label))}。"
+                    : "解析成功，选择清晰度后可下载，或把鼠标移到封面上点击播放。");
             await LoadCoverAsync(work.CoverUrl, ct).ConfigureAwait(true);
         }).ConfigureAwait(true);
     }
@@ -221,6 +228,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void OnMediaEnded()
     {
         IsPlaying = false;
+    }
+
+    [RelayCommand]
+    private void SelectQuality(string? quality)
+    {
+        if (string.IsNullOrWhiteSpace(quality) || SelectedQuality == quality)
+        {
+            return;
+        }
+
+        SelectedQuality = quality;
+        if (IsPlaybackVisible)
+        {
+            StopPlayback();
+        }
     }
 
     [RelayCommand]

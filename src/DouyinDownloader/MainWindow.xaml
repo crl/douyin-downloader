@@ -243,14 +243,24 @@
                                         </TextBlock>
                                         <StackPanel Margin="0,18,0,0" Visibility="{Binding ShowQualityOptions, Converter={StaticResource BoolToVis}}">
                                             <TextBlock Text="清晰度" Foreground="#C8C8C8" FontSize="13" Margin="0,0,0,8"/>
-                                            <StackPanel>
-                                                <RadioButton GroupName="Quality" Content="1080p" Foreground="#F5F5F5"
-                                                             IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=1080p}"/>
-                                                <RadioButton GroupName="Quality" Content="720p" Foreground="#F5F5F5"
-                                                             IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=720p}"/>
-                                                <RadioButton GroupName="Quality" Content="540p" Foreground="#F5F5F5"
-                                                             IsChecked="{Binding SelectedQuality, Converter={StaticResource StringEquals}, ConverterParameter=540p}"/>
-                                            </StackPanel>
+                                            <ItemsControl ItemsSource="{Binding Work.Qualities}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <RadioButton GroupName="Quality"
+                                                                     Content="{Binding DisplayLabel}"
+                                                                     Foreground="#F5F5F5"
+                                                                     Command="{Binding DataContext.SelectQualityCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                     CommandParameter="{Binding Id}">
+                                                            <RadioButton.IsChecked>
+                                                                <MultiBinding Converter="{StaticResource StringPairEquals}" Mode="OneWay">
+                                                                    <Binding Path="DataContext.SelectedQuality" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                    <Binding Path="Id"/>
+                                                                </MultiBinding>
+                                                            </RadioButton.IsChecked>
+                                                        </RadioButton>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </StackPanel>
                                     </StackPanel>
                                 </Grid>

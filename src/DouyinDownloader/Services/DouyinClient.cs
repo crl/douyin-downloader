@@ -81,7 +81,8 @@ public sealed class DouyinClient : IDisposable
         {
             var resolved = await ResolveShareAsync(url, timeout.Token).ConfigureAwait(false);
             var html = await FetchShareHtmlAsync(resolved, timeout.Token).ConfigureAwait(false);
-            return ParseShareHtml(html, resolved.AwemeId);
+            var work = ParseShareHtml(html, resolved.AwemeId);
+            return await EnrichQualitiesAsync(work, timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -305,10 +306,11 @@ public sealed class DouyinClient : IDisposable
         var coverUrl = FindCoverUrl(item, images);
         string? videoId = null;
         string? fallbackPlayUrl = null;
+        IReadOnlyList<VideoQuality> qualities = [];
 
         if (!isGallery)
         {
-            (videoId, fallbackPlayUrl) = ExtractPlayInfo(item);
+            (videoId, fallbackPlayUrl, qualities) = ExtractPlayInfo(item);
             if (string.IsNullOrWhiteSpace(videoId) && string.IsNullOrWhiteSpace(fallbackPlayUrl))
             {
                 throw new DouyinException("未找到可下载的无水印视频地址。");
@@ -329,36 +331,313 @@ public sealed class DouyinClient : IDisposable
             CoverUrl = coverUrl,
             VideoId = videoId,
             FallbackPlayUrl = fallbackPlayUrl,
-            ImageUrls = images
+            ImageUrls = images,
+            Qualities = qualities
         };
     }
 
-    private static (string? VideoId, string? FallbackPlayUrl) ExtractPlayInfo(JsonElement item)
+    private static (string? VideoId, string? FallbackPlayUrl, IReadOnlyList<VideoQuality> Qualities) ExtractPlayInfo(JsonElement item)
     {
         if (!item.TryGetProperty("video", out var video) || video.ValueKind != JsonValueKind.Object)
         {
-            return (null, null);
+            return (null, null, []);
         }
 
-        if (!video.TryGetProperty("play_addr", out var playAddr) || playAddr.ValueKind != JsonValueKind.Object)
-        {
-            return (null, null);
-        }
-
-        var uri = GetString(playAddr, "uri");
-        if (string.IsNullOrWhiteSpace(uri) || uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-        {
-            uri = null;
-        }
-
+        string? uri = null;
         string? fallback = null;
-        var playUrl = FirstUrl(playAddr, "url_list");
-        if (!string.IsNullOrEmpty(playUrl))
+        if (video.TryGetProperty("play_addr", out var playAddr) && playAddr.ValueKind == JsonValueKind.Object)
         {
-            fallback = playUrl.Replace("playwm", "play", StringComparison.OrdinalIgnoreCase);
+            uri = GetString(playAddr, "uri");
+            if (string.IsNullOrWhiteSpace(uri) || uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                uri = null;
+            }
+
+            var playUrl = FirstUrl(playAddr, "url_list");
+            if (!string.IsNullOrEmpty(playUrl))
+            {
+                fallback = playUrl.Replace("playwm", "play", StringComparison.OrdinalIgnoreCase);
+            }
         }
 
-        return (uri, fallback);
+        return (uri, fallback, ExtractQualities(video));
+    }
+
+    private static IReadOnlyList<VideoQuality> ExtractQualities(JsonElement video)
+    {
+        var collected = new List<VideoQuality>();
+
+        void AddAddr(JsonElement addr, string? gear = null)
+        {
+            if (addr.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            var width = GetInt(addr, "width");
+            var height = GetInt(addr, "height");
+            var url = FirstUrl(addr, "url_list");
+            if (!string.IsNullOrEmpty(url))
+            {
+                url = url.Replace("playwm", "play", StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (width is null && height is null && string.IsNullOrEmpty(gear) && string.IsNullOrEmpty(url))
+            {
+                return;
+            }
+
+            collected.Add(VideoQuality.FromDimensions(
+                width,
+                height,
+                gear,
+                string.IsNullOrEmpty(url) ? null : [url]));
+        }
+
+        foreach (var key in new[] { "play_addr", "play_addr_h264", "download_addr" })
+        {
+            if (video.TryGetProperty(key, out var addr))
+            {
+                AddAddr(addr);
+            }
+        }
+
+        if (video.TryGetProperty("bit_rate", out var bitRate) && bitRate.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in bitRate.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var gear = GetString(item, "gear_name");
+                if (item.TryGetProperty("play_addr", out var addr))
+                {
+                    AddAddr(addr, gear);
+                }
+            }
+        }
+
+        if (collected.Count == 0)
+        {
+            var width = GetInt(video, "width");
+            var height = GetInt(video, "height");
+            if (width is > 0 || height is > 0)
+            {
+                collected.Add(VideoQuality.FromDimensions(width, height));
+            }
+        }
+
+        return DedupeQualities(collected);
+    }
+
+    private async Task<WorkInfo> EnrichQualitiesAsync(WorkInfo work, CancellationToken cancellationToken)
+    {
+        if (!work.IsVideo)
+        {
+            return work;
+        }
+
+        if (string.IsNullOrWhiteSpace(work.VideoId) ||
+            work.VideoId.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            return EnsureQualities(work, originalDistinct: true);
+        }
+
+        (QualityProbe Candidate, long? Size)[] results = [];
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(18));
+
+            var probes = VideoQuality.ProbeCandidates.Select(async candidate =>
+            {
+                long? size = null;
+                foreach (var url in VideoQuality.PlayApiUrls(work.VideoId, candidate.Query))
+                {
+                    size = await ProbeContentLengthAsync(url, timeout.Token).ConfigureAwait(false);
+                    if (size is > 1024)
+                    {
+                        break;
+                    }
+                }
+
+                return (candidate, size);
+            });
+
+            results = await Task.WhenAll(probes).ConfigureAwait(false);
+            var probed = SelectDistinctQualities(results);
+            if (probed.Count > 0)
+            {
+                var originalSize = results
+                    .Where(item => item.Candidate.Rank >= 4000)
+                    .Select(item => item.Size)
+                    .FirstOrDefault(item => item is > 1024);
+                var hdSize = results
+                    .Where(item => item.Candidate.Id == "1080p")
+                    .Select(item => item.Size)
+                    .FirstOrDefault(item => item is > 1024);
+                var originalDistinct = originalSize is null
+                    || hdSize is null
+                    || originalSize > hdSize * 1.05;
+
+                return work.WithQualities(
+                    EnsureQualitiesList(MergeQualities(work.Qualities, probed), originalDistinct));
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // 探测超时则退回分享页档位，并保留 4K 尝试项。
+        }
+        catch
+        {
+            // 探测失败不影响解析。
+        }
+
+        return EnsureQualities(work, originalDistinct: true);
+    }
+
+    private async Task<long?> ProbeContentLengthAsync(string url, CancellationToken cancellationToken)
+    {
+        return await ProbeOnceAsync(url, withRange: true, cancellationToken).ConfigureAwait(false)
+               ?? await ProbeOnceAsync(url, withRange: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<long?> ProbeOnceAsync(string url, bool withRange, CancellationToken cancellationToken)
+    {
+        using var request = CreateMediaRequest(url);
+        if (withRange)
+        {
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 1023);
+        }
+
+        using var response = await _http
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.PartialContent)
+        {
+            return null;
+        }
+
+        var mediaType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+        if (mediaType.Contains("json", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.Contains("html", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.Contains("text", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (response.Content.Headers.ContentRange?.Length is long ranged and > 0)
+        {
+            return ranged;
+        }
+
+        return response.Content.Headers.ContentLength is > 0 and var length ? length : null;
+    }
+
+    private static IReadOnlyList<VideoQuality> SelectDistinctQualities(
+        (QualityProbe Candidate, long? Size)[] results)
+    {
+        var selected = new List<VideoQuality>();
+        long? previous = null;
+        foreach (var (candidate, size) in results.Where(item => item.Size is > 1024).OrderBy(item => item.Candidate.Rank))
+        {
+            var length = size!.Value;
+            if (previous is long prev && length <= prev * 1.05 && length - prev <= 512 * 1024)
+            {
+                continue;
+            }
+
+            previous = length;
+            selected.Add(new VideoQuality
+            {
+                Id = candidate.Id,
+                Label = candidate.Label,
+                Rank = candidate.Rank,
+                Ratio = candidate.Id == "4K" ? "4k" : candidate.Id.ToLowerInvariant(),
+                Query = candidate.Query,
+                SizeBytes = length
+            });
+        }
+
+        return selected.OrderByDescending(item => item.Rank).ToList();
+    }
+
+    private static IReadOnlyList<VideoQuality> MergeQualities(
+        IReadOnlyList<VideoQuality> parsed,
+        IReadOnlyList<VideoQuality> probed)
+    {
+        var map = new Dictionary<string, VideoQuality>(StringComparer.OrdinalIgnoreCase);
+        foreach (var quality in probed)
+        {
+            map[quality.Id] = quality;
+        }
+
+        foreach (var quality in parsed)
+        {
+            map[quality.Id] = map.TryGetValue(quality.Id, out var existing)
+                ? existing.MergeFrom(quality)
+                : quality;
+        }
+
+        return map.Count == 0
+            ? parsed
+            : map.Values.OrderByDescending(item => item.Rank).ToList();
+    }
+
+    private static WorkInfo EnsureQualities(WorkInfo work, bool originalDistinct)
+    {
+        if (!work.IsVideo)
+        {
+            return work;
+        }
+
+        return work.WithQualities(EnsureQualitiesList(work.Qualities, originalDistinct));
+    }
+
+    private static IReadOnlyList<VideoQuality> EnsureQualitiesList(
+        IReadOnlyList<VideoQuality> qualities,
+        bool originalDistinct)
+    {
+        var list = qualities.ToList();
+        if (originalDistinct && list.All(item => !string.Equals(item.Id, "4K", StringComparison.OrdinalIgnoreCase)))
+        {
+            list.Insert(0, new VideoQuality
+            {
+                Id = "4K",
+                Label = "4K",
+                Rank = 4000,
+                Ratio = "4k",
+                Query = VideoQuality.OriginalQuery
+            });
+        }
+
+        if (list.Count == 0)
+        {
+            list.AddRange(
+            [
+                new VideoQuality { Id = "1080p", Label = "1080p", Rank = 1080, Ratio = "1080p", Query = "ratio=1080p&line=0" },
+                new VideoQuality { Id = "720p", Label = "720p", Rank = 720, Ratio = "720p", Query = "ratio=720p&line=0" },
+                new VideoQuality { Id = "540p", Label = "540p", Rank = 540, Ratio = "540p", Query = "ratio=540p&line=0" }
+            ]);
+        }
+
+        return list.OrderByDescending(item => item.Rank).ToList();
+    }
+
+    private static IReadOnlyList<VideoQuality> DedupeQualities(IEnumerable<VideoQuality> items)
+    {
+        var map = new Dictionary<string, VideoQuality>(StringComparer.OrdinalIgnoreCase);
+        foreach (var quality in items)
+        {
+            map[quality.Id] = map.TryGetValue(quality.Id, out var existing)
+                ? existing.MergeFrom(quality)
+                : quality;
+        }
+
+        return map.Values.OrderByDescending(item => item.Rank).ToList();
     }
 
     private static string? FindCoverUrl(JsonElement item, IReadOnlyList<string> images)
@@ -497,6 +776,31 @@ public sealed class DouyinClient : IDisposable
             JsonValueKind.Number => value.ToString(),
             _ => null
         };
+    }
+
+    private static int? GetInt(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        if (value.TryGetInt32(out var i32))
+        {
+            return i32;
+        }
+
+        if (value.TryGetInt64(out var i64))
+        {
+            return (int)Math.Clamp(i64, int.MinValue, int.MaxValue);
+        }
+
+        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private static string? FirstUrl(JsonElement parent, string listProperty)

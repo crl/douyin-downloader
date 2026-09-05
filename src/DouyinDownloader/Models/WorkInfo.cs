@@ -24,6 +24,8 @@ public sealed class WorkInfo
 
     public IReadOnlyList<string> ImageUrls { get; init; } = [];
 
+    public IReadOnlyList<VideoQuality> Qualities { get; init; } = [];
+
     public string TypeLabel => Type == WorkType.Gallery ? "图集" : "视频";
 
     public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? "(无标题)" : Title;
@@ -32,16 +34,68 @@ public sealed class WorkInfo
 
     public bool IsVideo => Type == WorkType.Video;
 
+    public WorkInfo WithQualities(IReadOnlyList<VideoQuality> qualities)
+        => new()
+        {
+            AwemeId = AwemeId,
+            Title = Title,
+            Author = Author,
+            Type = Type,
+            CoverUrl = CoverUrl,
+            VideoId = VideoId,
+            FallbackPlayUrl = FallbackPlayUrl,
+            ImageUrls = ImageUrls,
+            Qualities = qualities
+        };
+
     public IReadOnlyList<string> GetVideoUrls(string ratio)
     {
-        var quality = string.IsNullOrWhiteSpace(ratio) ? "1080p" : ratio;
+        var selected = Qualities.FirstOrDefault(item =>
+                          string.Equals(item.Id, ratio, StringComparison.OrdinalIgnoreCase))
+                      ?? Qualities.FirstOrDefault();
+        var ratioParam = selected?.Ratio ?? (string.IsNullOrWhiteSpace(ratio) ? "1080p" : ratio);
         var urls = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(VideoId) && !VideoId.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
-            var id = Uri.EscapeDataString(VideoId);
-            urls.Add($"https://aweme.snssdk.com/aweme/v1/play/?video_id={id}&ratio={quality}&line=0");
-            urls.Add($"https://www.iesdouyin.com/aweme/v1/play/?video_id={id}&ratio={quality}&line=0");
+            if (!string.IsNullOrWhiteSpace(selected?.Query))
+            {
+                foreach (var url in VideoQuality.PlayApiUrls(VideoId, selected.Query))
+                {
+                    AddUnique(urls, url);
+                }
+            }
+
+            foreach (var url in VideoQuality.PlayApiUrls(VideoId, $"ratio={ratioParam}&line=0"))
+            {
+                AddUnique(urls, url);
+            }
+
+            if (selected is { Rank: >= 2160 } ||
+                string.Equals(ratioParam, "4k", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ratioParam, "4K", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var url in VideoQuality.PlayApiUrls(VideoId, VideoQuality.OriginalQuery))
+                {
+                    AddUnique(urls, url);
+                }
+
+                foreach (var extra in new[] { "4k", "2160p" })
+                {
+                    foreach (var url in VideoQuality.PlayApiUrls(VideoId, $"ratio={extra}&line=0"))
+                    {
+                        AddUnique(urls, url);
+                    }
+                }
+            }
+        }
+
+        if (selected is not null)
+        {
+            foreach (var url in selected.DirectUrls)
+            {
+                AddUnique(urls, url);
+            }
         }
 
         if (!string.IsNullOrEmpty(FallbackPlayUrl))
